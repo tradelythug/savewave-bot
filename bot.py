@@ -1,5 +1,6 @@
 import os
 import re
+import asyncio
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
@@ -9,7 +10,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
 
 # ── Platform detection ─────────────────────────────────────────────────────────
 
-def detect_platform(url: str) -> str | None:
+def detect_platform(url: str):
     if re.search(r"youtube\.com|youtu\.be", url):
         return "youtube"
     if re.search(r"tiktok\.com", url):
@@ -21,7 +22,6 @@ def detect_platform(url: str) -> str | None:
 # ── Downloaders ────────────────────────────────────────────────────────────────
 
 def fetch_tiktok(url: str) -> dict:
-    """Fetch TikTok video info via tikwm.com API (no watermark)."""
     try:
         res = requests.get(
             "https://www.tikwm.com/api/",
@@ -45,7 +45,6 @@ def fetch_tiktok(url: str) -> dict:
 
 
 def fetch_youtube_info(url: str) -> dict:
-    """Use yt-dlp to fetch YouTube video info and download link."""
     try:
         import yt_dlp
         ydl_opts = {
@@ -81,7 +80,6 @@ def fetch_youtube_info(url: str) -> dict:
 
 
 def fetch_instagram_info(url: str) -> dict:
-    """Use yt-dlp to fetch Instagram video info."""
     try:
         import yt_dlp
         ydl_opts = {
@@ -169,7 +167,6 @@ async def handle_url(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"{icons[platform]} Fetching your {platform.title()} video… please wait ⏳"
     )
 
-    # ── TikTok ──────────────────────────────────────────────────────────────────
     if platform == "tiktok":
         info = fetch_tiktok(url)
         if "error" in info:
@@ -205,7 +202,6 @@ async def handle_url(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
 
-    # ── YouTube ─────────────────────────────────────────────────────────────────
     elif platform == "youtube":
         info = fetch_youtube_info(url)
         if "error" in info:
@@ -247,7 +243,6 @@ async def handle_url(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
 
-    # ── Instagram ───────────────────────────────────────────────────────────────
     elif platform == "instagram":
         info = fetch_instagram_info(url)
         if "error" in info:
@@ -288,16 +283,18 @@ async def handle_url(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
 
-
 # ── Main ───────────────────────────────────────────────────────────────────────
 
-def main():
+async def run():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
     print("✅ SaveWave Bot is running…")
-    app.run_polling()
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(run())
